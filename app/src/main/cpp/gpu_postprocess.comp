@@ -208,25 +208,51 @@ vec4 sampleFsrEasu(vec2 srcPos) {
     return vec4(mix(bilinear, easu, 0.86), 1.0);
 }
 
+vec3 rcasPassAtRadius(vec3 color, ivec2 p, int r, float sharpWeight) {
+    vec3 n = loadPx(p + ivec2(0, -r)).rgb;
+    vec3 s = loadPx(p + ivec2(0,  r)).rgb;
+    vec3 e = loadPx(p + ivec2(r,  0)).rgb;
+    vec3 w = loadPx(p + ivec2(-r, 0)).rgb;
+
+    float lC = luma(color);
+    float lN = luma(n);
+    float lS = luma(s);
+    float lE = luma(e);
+    float lW = luma(w);
+
+    float mn4 = min(min(lN, lS), min(lE, lW));
+    float mx4 = max(max(lN, lS), max(lE, lW));
+
+    float hitMin = min(mn4, lC) / max(4.0 * mx4, 1.0e-4);
+    float hitMax = (1.0 - max(mx4, lC)) / min(4.0 * mn4 - 4.0, -1.0e-4);
+    float lobe = max(-hitMin, hitMax);
+
+    float localRange = max(mx4, lC) - min(mn4, lC);
+    float noiseGate = smoothstep(0.006, 0.030, localRange);
+
+    const float kRcasLimit = 0.215; // Crisp mobile RCAS limit (< 0.25 stability bound)
+    float weight = clamp(lobe, -kRcasLimit, 0.0) * sharpWeight * noiseGate;
+
+    vec3 outColor = (weight * (n + s + e + w) + color) / (4.0 * weight + 1.0);
+    return clamp(outColor, 0.0, 1.0);
+}
+
 vec3 fsrRcas(vec3 color, vec2 srcPos, float sharpness, float strength) {
     ivec2 p = ivec2(floor(srcPos));
-    vec3 n = loadPx(p + ivec2(0, -1)).rgb;
-    vec3 s = loadPx(p + ivec2(0, 1)).rgb;
-    vec3 e = loadPx(p + ivec2(1, 0)).rgb;
-    vec3 w = loadPx(p + ivec2(-1, 0)).rgb;
+    float sharpWeight = clamp(0.55 + 0.45 * sharpness, 0.0, 1.0)
+                      * clamp(0.60 + 0.40 * strength,  0.0, 1.0);
 
-    vec3 minC = min(color, min(min(n, s), min(e, w)));
-    vec3 maxC = max(color, max(max(n, s), max(e, w)));
-    vec3 ringLimit = max(maxC - color, color - minC);
-
-    vec3 lap = color * 4.0 - n - s - e - w;
-    float localContrast = max(max(ringLimit.r, ringLimit.g), ringLimit.b);
-    float amount = (0.18 + 0.62 * sharpness) * (0.45 + 0.55 * strength);
-    amount *= clamp(localContrast * 5.0, 0.0, 1.0);
-
-    vec3 sharpened = color + lap * amount;
-    vec3 clipped = clamp(sharpened, minC - ringLimit * 0.25, maxC + ringLimit * 0.25);
-    return clamp(clipped, 0.0, 1.0);
+    // On high-DPI displays (>=1800px, e.g. 2800x1260 phone screens), 720p/1080p
+    // game & video content is already upscaled 2x-3x before MediaProjection
+    // captures it, so a 1px tap only sees sub-pixel interpolation ramps.
+    // Combining r=2 (primary content edge scale, still inside TILE_HALO=3 L1)
+    // with r=1 (fine detail) delivers unmistakable AMD RCAS crispness.
+    if (max(pc.dstW, pc.dstH) >= 1800) {
+        vec3 coarse = rcasPassAtRadius(color, p, 2, sharpWeight);
+        vec3 fine   = rcasPassAtRadius(coarse, p, 1, sharpWeight * 0.65);
+        return fine;
+    }
+    return rcasPassAtRadius(color, p, 1, sharpWeight);
 }
 
 vec3 sharpen(vec3 color, vec2 srcPos, float amount) {
@@ -301,7 +327,61 @@ vec2 sgsrEdgeDirection(vec4 left, vec4 right) {
     return delta * lengthInv;
 }
 
+vec4 applySgsrV1Native(ivec2 ip, float sharpness, float strength) {
+    // At 1:1 native resolution on high-DPI displays (>=1800px), game/video
+    // frames captured by MediaProjection are already upscaled 2x-3x. Use a
+    // resolution-aware tap radius (r=2 on >=1800px, still inside TILE_HALO=3
+    // shared memory) for Qualcomm-style edge-directed luma detail restoration:
+    // sharpen across detected edges while keeping diagonal lines smooth.
+    int r = (max(pc.dstW, pc.dstH) >= 1800) ? 2 : 1;
+    vec4 center = loadPx(ip);
+    float c  = luma(center.rgb);
+    float n  = luma(loadPx(ip + ivec2( 0, -r)).rgb);
+    float s  = luma(loadPx(ip + ivec2( 0,  r)).rgb);
+    float e  = luma(loadPx(ip + ivec2( r,  0)).rgb);
+    float w  = luma(loadPx(ip + ivec2(-r,  0)).rgb);
+    float nw = luma(loadPx(ip + ivec2(-r, -r)).rgb);
+    float ne = luma(loadPx(ip + ivec2( r, -r)).rgb);
+    float sw = luma(loadPx(ip + ivec2(-r,  r)).rgb);
+    float se = luma(loadPx(ip + ivec2( r,  r)).rgb);
+
+    float gx = (ne + 2.0 * e + se) - (nw + 2.0 * w + sw);
+    float gy = (sw + 2.0 * s + se) - (nw + 2.0 * n + ne);
+    float grad2 = gx * gx + gy * gy;
+
+    float avgCross = 0.25 * (n + s + e + w);
+    float avgDiag  = 0.25 * (nw + ne + sw + se);
+    float localBlur = 0.65 * avgCross + 0.35 * avgDiag;
+
+    // Directional edge-across average: sharpens perpendicular to the edge so
+    // diagonal contours stay clean and un-jagged.
+    float dirMix = smoothstep(0.001, 0.025, grad2);
+    float invLen = inversesqrt(grad2 + 1.0e-5);
+    float nx = abs(gx) * invLen;
+    float ny = abs(gy) * invLen;
+    float acrossAvg = nx * nx * 0.5 * (e + w) + ny * ny * 0.5 * (n + s);
+    float refLuma = mix(localBlur, acrossAvg, 0.50 * dirMix);
+
+    float mn = min(c, min(min(n, s), min(e, w)));
+    float mx = max(c, max(max(n, s), max(e, w)));
+    float contrast = mx - mn;
+
+    // Noise gate tuned for soft upscaled video/TAA content.
+    float gate = smoothstep(0.008, 0.032, contrast);
+    float gain = (1.35 + 1.65 * sharpness) * (0.65 + 0.55 * strength);
+    float deltaY = (c - refLuma) * gain * gate;
+
+    // Anti-ringing clamp proportional to local contrast.
+    float maxDelta = min(0.28, contrast * 0.85 + 0.05);
+    deltaY = clamp(deltaY, -maxDelta, maxDelta);
+
+    return vec4(clamp(center.rgb + vec3(deltaY), 0.0, 1.0), 1.0);
+}
+
 vec4 applySgsrV1(vec2 srcPos, float sharpness, float strength) {
+    if (pc.srcW == pc.dstW && pc.srcH == pc.dstH) {
+        return applySgsrV1Native(ivec2(floor(srcPos)), sharpness, strength);
+    }
     vec4 color = sampleBilinear(srcPos);
     vec2 p = srcPos - vec2(0.5);
     ivec2 ip = ivec2(floor(p));
@@ -411,7 +491,13 @@ void main() {
     vec4 color;
 
     if (pc.method == 0) {
-        color = sampleFsrEasu(srcPos);
+        // Official AMD FSR 1 spec: at 1:1 native resolution, skip EASU (which
+        // is a spatial upscaler and would blur 1:1 input) and run pure RCAS.
+        if (pc.srcW == pc.dstW && pc.srcH == pc.dstH) {
+            color = loadPx(dst);
+        } else {
+            color = sampleFsrEasu(srcPos);
+        }
     } else if (pc.method == 3) {
         color = sampleLanczos(srcPos);
     } else if (pc.method == 4 || pc.method == 6 || pc.method == 7 ||

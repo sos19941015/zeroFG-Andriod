@@ -13,8 +13,8 @@ android {
         applicationId = "com.zerofg.android"
         minSdk = 29
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.1.11"
+        versionCode = 13
+        versionName = "0.2.1"
 
         // ABI filtering is handled by the splits { abi } block below (which
         // both restricts the build set to arm64-v8a/x86_64 and emits per-ABI

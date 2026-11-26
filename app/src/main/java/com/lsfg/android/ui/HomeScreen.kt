@@ -480,7 +480,7 @@ fun HomeScreen(nav: NavHostController) {
         )
 
         val frameGenSummary = if (state.lsfgEnabled) {
-            "ZeroFG 1.2 · ${state.multiplier}×" + if (state.animeMode) " · ${stringResource(R.string.param_anime_mode)}" else ""
+            "ZeroFG 1.2.1 · ${state.multiplier}×" + if (state.animeMode) " · ${stringResource(R.string.param_anime_mode)}" else ""
         } else {
             stringResource(R.string.status_off)
         }

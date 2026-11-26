@@ -1,14 +1,15 @@
 # ZeroFG Android
 
-Android 無需 Root 的即時 Vulkan 補幀與空間超解析應用程式，基於 [LSFG-Android](https://github.com/FrankBarretta/LSFG-Android) 架構並將底層補幀引擎完整替換為開源的 [ZeroFG 1.2.0](https://github.com/hy300leosquizz-ctrl/ZeroFG)（免 `Lossless.dll`）。
+Android 無需 Root 的即時 Vulkan 補幀與空間超解析應用程式，基於 [LSFG-Android](https://github.com/FrankBarretta/LSFG-Android) 架構並將底層補幀引擎完整替換為開源的 [ZeroFG 1.2.1](https://github.com/hy300leosquizz-ctrl/ZeroFG)（免 `Lossless.dll`）。
 
-An open-source, rootless Android Vulkan frame generation & spatial super-resolution app built on the [LSFG-Android](https://github.com/FrankBarretta/LSFG-Android) capture/overlay host and powered by [ZeroFG 1.2.0](https://github.com/hy300leosquizz-ctrl/ZeroFG) (no `Lossless.dll` required).
+An open-source, rootless Android Vulkan frame generation & spatial super-resolution app built on the [LSFG-Android](https://github.com/FrankBarretta/LSFG-Android) capture/overlay host and powered by [ZeroFG 1.2.1](https://github.com/hy300leosquizz-ctrl/ZeroFG) (no `Lossless.dll` required).
 
 ---
 
 ## 主要功能 / Features
 
-- **ZeroFG 1.2.0 補幀核心：**
+- **ZeroFG 1.2.1 補幀核心：**
+  - 新增 **Advanced VTF Filter（Vector Trail Fill）** 與色彩導向光流邊緣，大幅改善角色／物體移動遮擋背景時的邊緣光暈與果凍假影。
   - 支援 **2× / 3× / 4×** 倍率即時熱切換（依螢幕更新率自動限速，支援同對多相位光流重用 MFG Flow Reuse）。
   - 內建全域鏡頭平移搜尋（`df_cam`）、6 幀靜止 HUD／字幕鎖定（HUD Hold）與切鏡／淡入淡出保護。
   - 自動啟用 `Backend::kAuto`、`FP16`、`Subgroup`、`VK_KHR_global_priority` 高優先權 GPU Queue 與 `VK_GOOGLE_DISPLAY_TIMING`（不支援時安全降級）。
@@ -50,6 +51,6 @@ An open-source, rootless Android Vulkan frame generation & spatial super-resolut
 本專案建立於以下優秀開源專案的基礎之上，特此致謝：
 
 - **[LSFG-Android](https://github.com/FrankBarretta/LSFG-Android)** by **Francesco Barretta** — 感謝提供免 Root Android 螢幕擷取、無障礙觸控穿透疊加層、懸浮控制抽屜與 Vulkan 宿主框架（保留原始 [LICENSE](LICENSE)）。
-- **[ZeroFG (v1.2.0)](https://github.com/hy300leosquizz-ctrl/ZeroFG)**（commit `2504784`）— 感謝開源高效能行動端 Vulkan 補幀引擎，支援多相位光流重用、全域平移搜尋與 HUD 固定（原始碼與授權位於 `third_party/zerofg/`，採 Apache-2.0 / GPL-2.0+ 雙授權）。
+- **[ZeroFG (v1.2.1)](https://github.com/hy300leosquizz-ctrl/ZeroFG)**（commit `c5e9b64`）— 感謝開源高效能行動端 Vulkan 補幀引擎，支援 Advanced VTF Filter、多相位光流重用、全域平移搜尋與 HUD 固定（原始碼與授權位於 `third_party/zerofg/`，採 Apache-2.0 / GPL-2.0+ 雙授權）。
 - **[Snapdragon Game Super Resolution (SGSR v1)](https://github.com/SnapdragonGameStudios/snapdragon-gsr)** by **Qualcomm Innovation Center / Snapdragon Game Studios** — 感謝開源單 Pass 空間超解析演算法（BSD-3-Clause）。
 - **[volk](https://github.com/zeux/volk)**（commit `a8da8ef`）— Vulkan meta-loader（見 `third_party/volk/LICENSE.md`）。

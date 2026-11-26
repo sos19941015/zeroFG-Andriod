@@ -354,7 +354,7 @@ class SettingsDrawerOverlay(
         val frameGenSection = collapsibleSection(panel, ctx.getString(R.string.drawer_section_framegen), initiallyExpanded = true)
 
         frameGenSection.addView(switchRow(
-            label = "ZeroFG 1.2",
+            label = "ZeroFG 1.2.1",
             initial = initial.lsfgEnabled,
         ) {
             Log.i(TAG, "live: lsfgEnabled=$it")
